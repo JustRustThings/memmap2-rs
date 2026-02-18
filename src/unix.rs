@@ -62,6 +62,11 @@ const MAP_NORESERVE: libc::c_int = libc::MAP_NORESERVE;
 )))]
 const MAP_NORESERVE: libc::c_int = 0;
 
+#[cfg(target_vendor = "apple")]
+const MAP_RESILIENT_CODESIGN: libc::c_int = 0x2000;
+#[cfg(target_vendor = "apple")]
+const MAP_RESILIENT_MEDIA: libc::c_int = 0x4000;
+
 #[cfg(any(
     target_os = "android",
     all(target_os = "linux", not(target_env = "musl"))
@@ -73,6 +78,25 @@ use libc::{mmap64 as mmap, off64_t as off_t};
     all(target_os = "linux", not(target_env = "musl"))
 )))]
 use libc::{mmap, off_t};
+
+// On macOS, ensure we always pass MAP_RESILIENT_CODESIGN | MAP_RESILIENT_MEDIA
+// to avoid crashes when accessing the mapping.
+//
+// MAP_RESILIENT_CODESIGN avoids crashes when mapping a macho binary with an
+// invalid signature. See https://github.com/VirusTotal/yara/issues/1309 for
+// more information.
+//
+// MAP_RESILIENT_MEDIA avoids crashes when accessing a memory mapping of a file
+// that got truncated or is otherwise no longer accessible, replacing the reads
+// with zeroes.
+#[cfg(target_vendor = "apple")]
+const MAP_EXTRA_FLAGS: libc::c_int = MAP_RESILIENT_CODESIGN;
+#[cfg(target_vendor = "apple")]
+const MAP_RESILIENT_EXTRA_FLAGS: libc::c_int = MAP_RESILIENT_MEDIA;
+#[cfg(not(target_vendor = "apple"))]
+const MAP_EXTRA_FLAGS: libc::c_int = 0;
+#[cfg(not(target_vendor = "apple"))]
+const MAP_RESILIENT_EXTRA_FLAGS: libc::c_int = 0;
 
 pub struct MmapInner {
     ptr: *mut libc::c_void,
@@ -102,7 +126,7 @@ impl MmapInner {
                 std::ptr::null_mut(),
                 map_len as libc::size_t,
                 prot,
-                flags,
+                flags | MAP_EXTRA_FLAGS,
                 file,
                 aligned_offset as off_t,
             )
@@ -302,13 +326,15 @@ impl MmapInner {
         offset: u64,
         populate: bool,
         no_reserve: bool,
+        resilient: bool,
     ) -> io::Result<MmapInner> {
         let populate = if populate { MAP_POPULATE } else { 0 };
         let no_reserve = if no_reserve { MAP_NORESERVE } else { 0 };
+        let resilient = if resilient { MAP_RESILIENT_EXTRA_FLAGS } else { 0 };
         MmapInner::new(
             len,
             libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE | populate | no_reserve,
+            libc::MAP_PRIVATE | populate | no_reserve | resilient,
             file,
             offset,
         )
@@ -320,13 +346,15 @@ impl MmapInner {
         offset: u64,
         populate: bool,
         no_reserve: bool,
+        resilient: bool,
     ) -> io::Result<MmapInner> {
         let populate = if populate { MAP_POPULATE } else { 0 };
         let no_reserve = if no_reserve { MAP_NORESERVE } else { 0 };
+        let resilient = if resilient { MAP_RESILIENT_EXTRA_FLAGS } else { 0 };
         MmapInner::new(
             len,
             libc::PROT_READ,
-            libc::MAP_PRIVATE | populate | no_reserve,
+            libc::MAP_PRIVATE | populate | no_reserve | resilient,
             file,
             offset,
         )

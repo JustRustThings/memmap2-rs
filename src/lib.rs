@@ -160,6 +160,7 @@ pub struct MmapOptions {
     stack: bool,
     populate: bool,
     no_reserve_swap: bool,
+    resilient_mapping: bool,
 }
 
 impl MmapOptions {
@@ -354,6 +355,52 @@ impl MmapOptions {
     /// ```
     pub fn populate(&mut self) -> &mut Self {
         self.populate = true;
+        self
+    }
+
+    /// Sets the mapping as "resilient". This will avoid receiving a SIGBUS when
+    /// accessing the mapping beyond the end of the file - and instead return
+    /// zeroes.
+    ///
+    /// The option corresponds to the `MAP_RESILIENT_MEDIA` flag on macOS. It
+    /// has no effect on other platforms.
+    ///
+    /// Note that this flag only applies to private mappings, e.g. mappings
+    /// created through `MmapOptions::map_copy` and `MmapOptions::map_copy_read_only`.
+    /// Other types of mapping will ignore this flag.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use memmap2::MmapOptions;
+    /// use std::fs::File;
+    /// # use std::io::{Seek, SeekFrom, Write};
+    /// use std::path::PathBuf;
+    ///
+    /// # fn main() -> std::io::Result<()> {
+    /// # let tempdir = tempfile::tempdir()?;
+    /// let path: PathBuf = /* path to file */
+    /// #   tempdir.path().join("map");
+    /// # let mut origf = File::create(&path)?;
+    /// # origf.set_len(10 * 4096)?;
+    /// # origf.seek(SeekFrom::End(-10))?;
+    /// # origf.write_all(b"a")?;
+    /// let mut file = File::open(&path)?;
+    ///
+    /// let mmap = unsafe {
+    ///     MmapOptions::new().resilient().map_copy_read_only(&file)?
+    /// };
+    ///
+    /// origf.set_len(1024)?;
+    ///
+    /// // Still fetches the old data.
+    /// assert_eq!(mmap[mmap.len() - 10], b'a');
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn resilient(&mut self) -> &mut Self {
+        self.resilient_mapping = true;
         self
     }
 
@@ -552,6 +599,7 @@ impl MmapOptions {
             self.offset,
             self.populate,
             self.no_reserve_swap,
+            self.resilient_mapping,
         )
         .map(|inner| MmapMut { inner })
     }
@@ -599,6 +647,7 @@ impl MmapOptions {
             self.offset,
             self.populate,
             self.no_reserve_swap,
+            self.resilient_mapping,
         )
         .map(|inner| Mmap { inner })
     }
