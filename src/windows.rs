@@ -318,6 +318,7 @@ impl MmapInner {
         _populate: bool,
         _no_reserve: bool,
         probe_handle: bool,
+        _resilient: bool,
     ) -> io::Result<MmapInner> {
         let exec = probe_handle && protection_supported(handle, PAGE_EXECUTE_READWRITE);
         let mut access = FILE_MAP_COPY;
@@ -342,6 +343,7 @@ impl MmapInner {
         _populate: bool,
         _no_reserve: bool,
         probe_handle: bool,
+        _resilient: bool,
     ) -> io::Result<MmapInner> {
         let write = probe_handle && protection_supported(handle, PAGE_READWRITE);
         let exec = probe_handle && protection_supported(handle, PAGE_EXECUTE_READ);
