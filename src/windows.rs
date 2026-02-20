@@ -307,6 +307,7 @@ impl MmapInner {
         offset: u64,
         _populate: bool,
         _no_reserve: bool,
+        _resilient: bool,
     ) -> io::Result<MmapInner> {
         let exec = protection_supported(handle, PAGE_EXECUTE_READWRITE);
         let mut access = FILE_MAP_COPY;
@@ -330,6 +331,7 @@ impl MmapInner {
         offset: u64,
         _populate: bool,
         _no_reserve: bool,
+        _resilient: bool,
     ) -> io::Result<MmapInner> {
         let write = protection_supported(handle, PAGE_READWRITE);
         let exec = protection_supported(handle, PAGE_EXECUTE_READ);
