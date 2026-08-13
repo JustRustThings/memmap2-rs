@@ -284,6 +284,16 @@ impl MmapInner {
         )
     }
 
+    pub fn map_read_only_exact(
+        len: usize,
+        file: RawFd,
+        offset: u64,
+        populate: bool,
+        no_reserve: bool,
+    ) -> io::Result<MmapInner> {
+        Self::map(len, file, offset, populate, no_reserve)
+    }
+
     pub fn map_exec(
         len: usize,
         file: RawFd,

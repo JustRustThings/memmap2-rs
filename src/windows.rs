@@ -261,6 +261,16 @@ impl MmapInner {
         Ok(inner)
     }
 
+    pub fn map_read_only_exact(
+        len: usize,
+        handle: RawHandle,
+        offset: u64,
+        _populate: bool,
+        _no_reserve: bool,
+    ) -> io::Result<MmapInner> {
+        MmapInner::new(handle, PAGE_READONLY, FILE_MAP_READ, offset, len, false)
+    }
+
     pub fn map_exec(
         len: usize,
         handle: RawHandle,

@@ -486,6 +486,66 @@ impl MmapOptions {
         .map(|inner| Mmap { inner })
     }
 
+    /// Creates a read-only memory map backed by a file, requesting exactly
+    /// read-only protection.
+    ///
+    /// Unlike [`map()`][MmapOptions::map], this never probes the file handle
+    /// for wider protections. On Windows, `map()` issues up to two extra
+    /// `CreateFileMappingW` calls to discover whether the handle supports
+    /// write or execute access, and creates the section with the widest
+    /// supported protection so the view can later be transitioned with
+    /// [`Mmap::make_mut()`]. This method instead creates the section with
+    /// `PAGE_READONLY` and the view with `FILE_MAP_READ` in a single call
+    /// each; as a consequence, [`Mmap::make_mut()`] on the returned map will
+    /// fail. On other platforms it is equivalent to `map()`.
+    ///
+    /// [`MmapOptions::resilient`] has no effect on this mapping type.
+    ///
+    /// # Safety
+    ///
+    /// See the [type-level][MmapOptions] docs for why this function is unsafe.
+    ///
+    /// # Errors
+    ///
+    /// This method returns an error when the underlying system call fails, which can happen for a
+    /// variety of reasons, such as when the file is not open with read permissions.
+    ///
+    /// Returns [`ErrorKind::Unsupported`] on unsupported platforms.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use memmap2::MmapOptions;
+    /// use std::fs::File;
+    /// use std::io::Read;
+    ///
+    /// # fn main() -> std::io::Result<()> {
+    /// let mut file = File::open("LICENSE-APACHE")?;
+    ///
+    /// let mut contents = Vec::new();
+    /// file.read_to_end(&mut contents)?;
+    ///
+    /// let mmap = unsafe {
+    ///     MmapOptions::new().map_read_only_exact(&file)?
+    /// };
+    ///
+    /// assert_eq!(&contents[..], &mmap[..]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub unsafe fn map_read_only_exact<T: MmapAsRawDesc>(&self, file: T) -> Result<Mmap> {
+        let desc = file.as_raw_desc();
+
+        MmapInner::map_read_only_exact(
+            self.get_len(&file)?,
+            desc.0,
+            self.offset,
+            self.populate,
+            self.no_reserve_swap,
+        )
+        .map(|inner| Mmap { inner })
+    }
+
     /// Creates a readable and executable memory map backed by a file.
     ///
     /// # Safety
@@ -1897,6 +1957,33 @@ mod test {
         let mmap2 = unsafe { MmapOptions::new().map(&file).unwrap() };
         (&mmap2[..]).read_exact(&mut read).unwrap();
         assert_eq!(nulls, &read);
+    }
+
+    #[test]
+    fn map_read_only_exact() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join("mmap");
+
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        file.write_all(b"exact contents").unwrap();
+
+        let readonly = File::open(&path).unwrap();
+        let mmap = unsafe { MmapOptions::new().map_read_only_exact(&readonly).unwrap() };
+        assert_eq!(b"exact contents", &mmap[..]);
+
+        // Even with a writable handle, the section is created strictly
+        // read-only, so the mapping cannot be transitioned to writable.
+        #[cfg(windows)]
+        {
+            let mmap = unsafe { MmapOptions::new().map_read_only_exact(&file).unwrap() };
+            assert!(mmap.make_mut().is_err());
+        }
     }
 
     #[test]

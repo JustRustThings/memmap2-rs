@@ -17,6 +17,16 @@ impl MmapInner {
         MmapInner::new()
     }
 
+    pub fn map_read_only_exact(
+        _: usize,
+        _: &File,
+        _: u64,
+        _: bool,
+        _: bool,
+    ) -> io::Result<MmapInner> {
+        MmapInner::new()
+    }
+
     pub fn map_exec(_: usize, _: &File, _: u64, _: bool, _: bool) -> io::Result<MmapInner> {
         MmapInner::new()
     }
